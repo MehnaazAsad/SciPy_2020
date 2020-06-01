@@ -3,14 +3,16 @@
  in the ECO DR1 survey.}
 """
 
-import matplotlib.gridspec as gridspec  
 import matplotlib.pyplot as plt
 from matplotlib import rc
 import pandas as pd
 import numpy as np
 import random
+import time
+import sys
 
-__author__ = '{Mehnaaz Asad}'
+__author__ = "Mehnaaz Asad"
+__email__  = "mehnaaz.asad@vanderbilt.edu"
 
 def read_data(path):
     """
@@ -234,9 +236,13 @@ def get_sigma_error(groups, keys):
     std_blue_err: np.array
         Bootstrapped error result for groups with blue centrals
     """
-
-    grp_key_arr = list(keys)
     N_samples = 20
+
+    sys.stdout.write("[%s]" % (" " * N_samples))
+    sys.stdout.flush()
+    sys.stdout.write("\b" * (N_samples+1)) # return to start of line, after '['
+    
+    grp_key_arr = list(keys)
     std_blue_cen_arr_global = []
     std_red_cen_arr_global = []
     for i in range(N_samples):
@@ -273,7 +279,10 @@ def get_sigma_error(groups, keys):
         
         std_red_cen_arr_global.append(std_red_cen_arr)
         std_blue_cen_arr_global.append(std_blue_cen_arr)
+        sys.stdout.write("-")
+        sys.stdout.flush()
 
+    sys.stdout.write("]\n") # this ends the progress bar
     std_red_cen_arr_global = np.array(std_red_cen_arr_global)
     std_blue_cen_arr_global = np.array(std_blue_cen_arr_global)
 
@@ -303,6 +312,7 @@ def main():
     rc('xtick.major', width=2, size=7)
     rc('ytick.major', width=2, size=7)
 
+    print('[1/5] Reading data and assigning colour label')
     path_to_data = 'eco_dr1.csv'
     eco = read_data(path_to_data)
 
@@ -311,6 +321,7 @@ def main():
     eco_groups = eco_nobuff.groupby('grp')
     eco_keys = eco_groups.groups.keys()
 
+    print('[2/5] Calculating velocity dispersion')
     vel_col_mass_df = calc_vel_disp(eco_groups, eco_keys)
 
     # Separating both galaxy populations
@@ -319,18 +330,19 @@ def main():
     df_red_cen = vel_col_mass_df.loc[vel_col_mass_df['cen_colour_label'] == \
         'R']
 
+    print('[3/5] Calculating spread in velocity dispersion')
     std_red_cen_arr, std_blue_cen_arr, mass_bins = calc_sigma(df_red_cen, 
         df_blue_cen)
 
+    print('[4/5] Calculating error in sigma via bootstrapping')
     std_red_cen_err, std_blue_cen_err = get_sigma_error(eco_groups, eco_keys)
 
     # Getting columns needed for plot
     stellar_mass, deltav, cen_colour = vel_col_mass_df['cen_logmstar'], \
         vel_col_mass_df['deltav'], vel_col_mass_df['cen_ur_colour']
 
+    print('[5/5] Plotting')
     fig1 = plt.figure(figsize=(15,10))
-    # gs = gridspec.GridSpec(1, 1)
-    # ax1 = plt.subplot(gs[0,0])
     plt.scatter(stellar_mass, deltav, s=7, c=cen_colour, 
         cmap='coolwarm')
     cbar = plt.colorbar()
@@ -349,7 +361,8 @@ def main():
         color='#f46542',fmt='s',ecolor='#f46542',markersize=4,capsize=5,
         capthick=0.5)
     ax2.set_ylabel(r'\boldmath$\sigma\ \left[km/s\right]$', fontsize=20)
-    plt.savefig('eco_vel_disp.png',bbox_inches='tight')
+    plt.savefig('eco_vel_disp.pdf',bbox_inches='tight')
 
 if __name__ == '__main__':
     main()
+    print('Plot saved successfully as eco_vel_disp.pdf in repository')
