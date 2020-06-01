@@ -244,7 +244,7 @@ for index1,bin_edge in enumerate(stellar_mass_bins):
 # Getting error from bootstraping for red and blue galaxies
 std_red_cen_err, std_blue_cen_err = get_sigma_error(eco_keys)
 
-fig1 = plt.figure(figsize=(10,10))
+fig1 = plt.figure(figsize=(15,10))
 gs = gridspec.GridSpec(1, 1)
 ax1 = plt.subplot(gs[0,0])
 plt.scatter(cen_stellar_mass_arr, deltav_arr, s=7, c=cen_colour_arr, 
@@ -264,5 +264,4 @@ ax2.errorbar(stellar_mass_bins[:-1],std_red_cen_arr,yerr=std_red_cen_err,
     color='#f46542',fmt='s',ecolor='#f46542',markersize=4,capsize=5,
     capthick=0.5)
 ax2.set_ylabel(r'\boldmath$\sigma\ \left[km/s\right]$', fontsize=20)
-fig1.tight_layout()
-plt.show()
+plt.savefig('eco_vel_disp.png',bbox_inches='tight')
