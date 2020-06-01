@@ -1,9 +1,16 @@
+"""
+{This script calculates and plots velocity dispersion of red and blue galaxies
+ in the ECO DR1 survey.}
+"""
+
 import matplotlib.gridspec as gridspec  
 import matplotlib.pyplot as plt
 from matplotlib import rc
 import pandas as pd
 import numpy as np
 import random
+
+__author__ = '{Mehnaaz Asad}'
 
 def std_func(num_arr):
     """
