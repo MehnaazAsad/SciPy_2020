@@ -12,33 +12,27 @@ import random
 
 __author__ = '{Mehnaaz Asad}'
 
-def calc_std(array):
+def read_data(path):
     """
-    Calculates standard deviation from 0
+    Reading in data and applying completeness and survey buffer region cuts
 
     Parameters
     ----------
-    num_arr: np.array
-        Array of numbers to calculate standard deviation of
+    path: string
+        Path to data catalog
 
     Returns
     ---------
-    std: float
-        Standard deviation of input array
+    df: pd.DataFrame
+        Post-cuts survey
     """
     
-    if len(array) == 0:
-        return 0
-    mean = 0
-    diff_sqrd_arr = []
-    for value in array:
-        diff = value - mean
-        diff_sqrd = diff**2
-        diff_sqrd_arr.append(diff_sqrd)
-    mean_diff_sqrd = np.mean(diff_sqrd_arr)
-    std = np.sqrt(mean_diff_sqrd)
+    df = pd.read_csv('eco_dr1.csv', delimiter=',', header=0)
+    df = df.loc[(df.grpcz.values >= 3000) & 
+        (df.grpcz.values <= 7000) & (df.absrmag.values <= -17.33) &
+        (df.logmstar.values >= 8.9)]
 
-    return std
+    return df
 
 def assign_colour_label_data(df):
     """
@@ -46,12 +40,12 @@ def assign_colour_label_data(df):
 
     Parameters
     ----------
-    catl: pandas Dataframe 
+    df: pd.DataFrame 
         Data catalog
 
     Returns
     ---------
-    catl: pandas Dataframe
+    catl: pd.DataFrame
         Data catalog with colour label assigned as new column
     """
     catl = df.copy()
@@ -87,92 +81,6 @@ def assign_colour_label_data(df):
     catl['colour_label'] = colour_label_arr
 
     return catl
-
-def get_sigma_error(groups, keys):
-    """
-    Bootstrap error in sigma using 20 samples and all galaxies in survey
-
-    Parameters
-    ----------
-    groups: pandas groupby object
-        Galaxies grouped by group ID
-    keys: np.array
-        Unique group IDs of galaxies in survey
-
-    Returns
-    ---------
-    std_red_err: np.array
-        Bootstrapped error result for groups with red centrals
-    std_blue_err: np.array
-        Bootstrapped error result for groups with blue centrals
-    """
-
-    grp_key_arr = list(keys)
-    N_samples = 20
-    std_blue_cen_arr_global = []
-    std_red_cen_arr_global = []
-    for i in range(N_samples):
-        deltav_arr = []
-        cen_stellar_mass_arr = []
-        cen_colour_arr = []
-        for j in range(len(keys)):
-            rng = random.choice(grp_key_arr)
-            group = groups.get_group(rng)
-            cz_arr = group.cz.values
-            grpcz = np.unique(group.grpcz.values)
-            deltav = cz_arr-grpcz
-            # Since some groups don't have a central
-            if 1 in group.fc.values:
-                cen_stellar_mass = group.logmstar.loc[group.fc.values == 1].\
-                    values[0]
-                cen_colour_label = group.colour_label.loc[group.fc.values == 1]\
-                    .values[0]
-            for val in deltav:
-                deltav_arr.append(val)
-                cen_stellar_mass_arr.append(cen_stellar_mass)
-                cen_colour_arr.append(cen_colour_label)
-        data = {'deltav': deltav_arr, 'log_cen_stellar_mass': \
-            cen_stellar_mass_arr, 'cen_colour_label': cen_colour_arr}
-        vel_col_mass_df = pd.DataFrame(data)
-        df_blue_cen = vel_col_mass_df.loc[vel_col_mass_df['cen_colour_label'] \
-            == 'B']
-        df_red_cen = vel_col_mass_df.loc[vel_col_mass_df['cen_colour_label'] \
-            == 'R']
-        std_red_cen_arr, std_blue_cen_arr, mass_bins = calc_sigma(df_red_cen, 
-            df_blue_cen)
-        
-        std_red_cen_arr_global.append(std_red_cen_arr)
-        std_blue_cen_arr_global.append(std_blue_cen_arr)
-
-    std_red_cen_arr_global = np.array(std_red_cen_arr_global)
-    std_blue_cen_arr_global = np.array(std_blue_cen_arr_global)
-
-    std_red_err = np.std(std_red_cen_arr_global, axis=0)
-    std_blue_err = np.std(std_blue_cen_arr_global, axis=0)
-
-    return std_red_err, std_blue_err
-
-def read_data(path):
-    """
-    Reading in data and applying completeness and survey buffer region cuts
-
-    Parameters
-    ----------
-    path: string
-        Path to data catalog
-
-    Returns
-    ---------
-    eco: pd.DataFrame
-        Post-cuts survey
-    """
-    
-    eco = pd.read_csv('eco_dr1.csv', delimiter=',', header=0)
-    eco = eco.loc[(eco.grpcz.values >= 3000) & 
-        (eco.grpcz.values <= 7000) & (eco.absrmag.values <= -17.33) &
-        (eco.logmstar.values >= 8.9)]
-
-    return eco
 
 def calc_vel_disp(groups, keys):
     """
@@ -223,6 +131,36 @@ def calc_vel_disp(groups, keys):
 
     return data_df
 
+def calc_std(array):
+    """
+    Calculates standard deviation from 0
+
+    Parameters
+    ----------
+    array: np.array
+        Array of numbers to calculate standard deviation of
+
+    Returns
+    ---------
+    std: float
+        Standard deviation of input array
+    """
+    
+    # For last blue bin being higher than the max logmstar of blue centrals in 
+    # data
+    if len(array) == 0:
+        return 0
+    mean = 0
+    diff_sqrd_arr = []
+    for value in array:
+        diff = value - mean
+        diff_sqrd = diff**2
+        diff_sqrd_arr.append(diff_sqrd)
+    mean_diff_sqrd = np.mean(diff_sqrd_arr)
+    std = np.sqrt(mean_diff_sqrd)
+
+    return std
+
 def calc_sigma(df_red, df_blue):
     """
     Calculating std manually from mean set to 0 km/s
@@ -240,7 +178,7 @@ def calc_sigma(df_red, df_blue):
         Std of red galaxies
     std_blue_arr: list
         Std of blue galaxies
-    stellar_mass_bins: np.array()
+    stellar_mass_bins: np.array
         Bins of stellar mass in logspace
     """
 
@@ -248,41 +186,116 @@ def calc_sigma(df_red, df_blue):
     df_blue_cen = df_blue.copy()
 
     stellar_mass_bins = np.arange(7,12,0.5)
-    i = 0
     std_blue_arr = []
     for index1,bin_edge in enumerate(stellar_mass_bins):
         df_blue_cen_deltav_arr = []
         if index1 == 9:
             break
         for index2,stellar_mass in enumerate(df_blue_cen.\
-            log_cen_stellar_mass.values):
+            cen_logmstar.values):
             if stellar_mass >= bin_edge and stellar_mass < \
                 stellar_mass_bins[index1+1]:
                 df_blue_cen_deltav_arr.append(df_blue_cen.deltav.\
                     values[index2])
-        N = len(df_blue_cen_deltav_arr)
         std = calc_std(df_blue_cen_deltav_arr)
         std_blue_arr.append(std)
 
-    i = 0
     std_red_arr = []
     for index1,bin_edge in enumerate(stellar_mass_bins):
         df_red_cen_deltav_arr = []
         if index1 == 9:
             break
         for index2,stellar_mass in enumerate(df_red_cen.\
-            log_cen_stellar_mass.values):
+            cen_logmstar.values):
             if stellar_mass >= bin_edge and stellar_mass < \
                 stellar_mass_bins[index1+1]:
                 df_red_cen_deltav_arr.append(df_red_cen.deltav.\
                     values[index2])
-        N = len(df_red_cen_deltav_arr)
         std = calc_std(df_red_cen_deltav_arr)
         std_red_arr.append(std)
     
     return std_red_arr, std_blue_arr, stellar_mass_bins
 
+def get_sigma_error(groups, keys):
+    """
+    Bootstrap error in sigma using 20 samples and all galaxies in survey
+
+    Parameters
+    ----------
+    groups: pandas groupby object
+        Galaxies grouped by group ID
+    keys: np.array
+        Unique group IDs of galaxies in survey
+
+    Returns
+    ---------
+    std_red_err: np.array
+        Bootstrapped error result for groups with red centrals
+    std_blue_err: np.array
+        Bootstrapped error result for groups with blue centrals
+    """
+
+    grp_key_arr = list(keys)
+    N_samples = 20
+    std_blue_cen_arr_global = []
+    std_red_cen_arr_global = []
+    for i in range(N_samples):
+        deltav_arr = []
+        cen_stellar_mass_arr = []
+        cen_colour_arr = []
+        for j in range(len(keys)):
+            rng = random.choice(grp_key_arr)
+            group = groups.get_group(rng)
+            cz_arr = group.cz.values
+            grpcz = np.unique(group.grpcz.values)
+            deltav = cz_arr-grpcz
+            # Since some groups don't have a central
+            if 1 in group.fc.values:
+                cen_stellar_mass = group.logmstar.loc[group.fc.values == 1].\
+                    values[0]
+                cen_colour_label = group.colour_label.loc[group.fc.values == 1]\
+                    .values[0]
+            for val in deltav:
+                deltav_arr.append(val)
+                cen_stellar_mass_arr.append(cen_stellar_mass)
+                cen_colour_arr.append(cen_colour_label)
+
+        data = {'deltav': deltav_arr, 'cen_logmstar': \
+            cen_stellar_mass_arr, 'cen_colour_label': cen_colour_arr}
+        vel_col_mass_df = pd.DataFrame(data)
+
+        df_blue_cen = vel_col_mass_df.loc[vel_col_mass_df['cen_colour_label'] \
+            == 'B']
+        df_red_cen = vel_col_mass_df.loc[vel_col_mass_df['cen_colour_label'] \
+            == 'R']
+        std_red_cen_arr, std_blue_cen_arr, mass_bins = calc_sigma(df_red_cen, 
+            df_blue_cen)
+        
+        std_red_cen_arr_global.append(std_red_cen_arr)
+        std_blue_cen_arr_global.append(std_blue_cen_arr)
+
+    std_red_cen_arr_global = np.array(std_red_cen_arr_global)
+    std_blue_cen_arr_global = np.array(std_blue_cen_arr_global)
+
+    std_red_err = np.std(std_red_cen_arr_global, axis=0)
+    std_blue_err = np.std(std_blue_cen_arr_global, axis=0)
+
+    return std_red_err, std_blue_err
+
 def main():
+    """
+    Main function
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    ---------
+    eco_vel_disp.png: plt.figure object
+        Final plot of velocity dispersion measurement
+    """
+
     # Formatting for plot
     rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']}, size=20)
     rc('text', usetex=True)
@@ -295,7 +308,6 @@ def main():
 
     eco_nobuff = assign_colour_label_data(eco)
 
-
     eco_groups = eco_nobuff.groupby('grp')
     eco_keys = eco_groups.groups.keys()
 
@@ -307,11 +319,9 @@ def main():
     df_red_cen = vel_col_mass_df.loc[vel_col_mass_df['cen_colour_label'] == \
         'R']
 
-    # Calculating std manually from mean set to 0 km/s
     std_red_cen_arr, std_blue_cen_arr, mass_bins = calc_sigma(df_red_cen, 
         df_blue_cen)
 
-    # Getting error from bootstraping for red and blue galaxies
     std_red_cen_err, std_blue_cen_err = get_sigma_error(eco_groups, eco_keys)
 
     # Getting columns needed for plot
