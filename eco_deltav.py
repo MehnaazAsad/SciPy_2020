@@ -12,7 +12,7 @@ import random
 
 __author__ = '{Mehnaaz Asad}'
 
-def std_func(num_arr):
+def calc_std(array):
     """
     Calculates standard deviation from 0
 
@@ -26,16 +26,18 @@ def std_func(num_arr):
     std: float
         Standard deviation of input array
     """
-    if len(num_arr) == 0:
+    
+    if len(array) == 0:
         return 0
     mean = 0
     diff_sqrd_arr = []
-    for value in num_arr:
+    for value in array:
         diff = value - mean
         diff_sqrd = diff**2
         diff_sqrd_arr.append(diff_sqrd)
     mean_diff_sqrd = np.mean(diff_sqrd_arr)
     std = np.sqrt(mean_diff_sqrd)
+
     return std
 
 def assign_colour_label_data(df):
@@ -86,24 +88,26 @@ def assign_colour_label_data(df):
 
     return catl
 
-def get_sigma_error(eco_keys):
+def get_sigma_error(groups, keys):
     """
     Bootstrap error in sigma using 20 samples and all galaxies in survey
 
     Parameters
     ----------
-    eco_keys: np.array
+    groups: pandas groupby object
+        Galaxies grouped by group ID
+    keys: np.array
         Unique group IDs of galaxies in survey
 
     Returns
     ---------
-    std_red_cen_err: np.array
+    std_red_err: np.array
         Bootstrapped error result for groups with red centrals
-    std_blue_cen_err: np.array
+    std_blue_err: np.array
         Bootstrapped error result for groups with blue centrals
     """
 
-    grp_key_arr = list(eco_keys)
+    grp_key_arr = list(keys)
     N_samples = 20
     std_blue_cen_arr_global = []
     std_red_cen_arr_global = []
@@ -111,157 +115,231 @@ def get_sigma_error(eco_keys):
         deltav_arr = []
         cen_stellar_mass_arr = []
         cen_colour_arr = []
-        for j in range(len(eco_keys)):
+        for j in range(len(keys)):
             rng = random.choice(grp_key_arr)
-            group = eco_groups.get_group(rng)
+            group = groups.get_group(rng)
             cz_arr = group.cz.values
             grpcz = np.unique(group.grpcz.values)
             deltav = cz_arr-grpcz
             # Since some groups don't have a central
             if 1 in group.fc.values:
-                cen_stellar_mass = group.logmstar.loc[group.fc.values == 1].values[0]
-                cen_colour_label = group.colour_label.loc[group.fc.values == 1].values[0]
+                cen_stellar_mass = group.logmstar.loc[group.fc.values == 1].\
+                    values[0]
+                cen_colour_label = group.colour_label.loc[group.fc.values == 1]\
+                    .values[0]
             for val in deltav:
                 deltav_arr.append(val)
                 cen_stellar_mass_arr.append(cen_stellar_mass)
                 cen_colour_arr.append(cen_colour_label)
-        data = {'deltav': deltav_arr, 'log_cen_stellar_mass': cen_stellar_mass_arr,\
-            'cen_colour_label': cen_colour_arr}
+        data = {'deltav': deltav_arr, 'log_cen_stellar_mass': \
+            cen_stellar_mass_arr, 'cen_colour_label': cen_colour_arr}
         vel_col_mass_df = pd.DataFrame(data)
-        df_blue_cen = vel_col_mass_df.loc[vel_col_mass_df['cen_colour_label'] == 'B']
-        df_red_cen = vel_col_mass_df.loc[vel_col_mass_df['cen_colour_label'] == 'R']
-        stellar_mass_bins = np.arange(7,12,0.5)
-        i = 0
-        std_blue_cen_arr = []
-        for index1,bin_edge in enumerate(stellar_mass_bins):
-            df_blue_cen_deltav_arr = []
-            if index1 == 9:
-                break
-            for index2,stellar_mass in enumerate(df_blue_cen.log_cen_stellar_mass.values):
-                if stellar_mass >= bin_edge and stellar_mass < stellar_mass_bins[index1+1]:
-                    df_blue_cen_deltav_arr.append(df_blue_cen.deltav.values[index2])
-            std = std_func(df_blue_cen_deltav_arr)
-            std_blue_cen_arr.append(std)
-        i = 0
-        std_red_cen_arr = []
-        for index1,bin_edge in enumerate(stellar_mass_bins):
-            df_red_cen_deltav_arr = []
-            if index1 == 9:
-                break
-            for index2,stellar_mass in enumerate(df_red_cen.log_cen_stellar_mass.values):
-                if stellar_mass >= bin_edge and stellar_mass < stellar_mass_bins[index1+1]:
-                    df_red_cen_deltav_arr.append(df_red_cen.deltav.values[index2])
-            std = std_func(df_red_cen_deltav_arr)
-            std_red_cen_arr.append(std)
-        std_blue_cen_arr_global.append(std_blue_cen_arr)
+        df_blue_cen = vel_col_mass_df.loc[vel_col_mass_df['cen_colour_label'] \
+            == 'B']
+        df_red_cen = vel_col_mass_df.loc[vel_col_mass_df['cen_colour_label'] \
+            == 'R']
+        std_red_cen_arr, std_blue_cen_arr, mass_bins = calc_sigma(df_red_cen, 
+            df_blue_cen)
+        
         std_red_cen_arr_global.append(std_red_cen_arr)
+        std_blue_cen_arr_global.append(std_blue_cen_arr)
 
     std_red_cen_arr_global = np.array(std_red_cen_arr_global)
     std_blue_cen_arr_global = np.array(std_blue_cen_arr_global)
 
-    std_red_cen_err = np.std(std_red_cen_arr_global, axis=0)
-    std_blue_cen_err = np.std(std_blue_cen_arr_global, axis=0)
+    std_red_err = np.std(std_red_cen_arr_global, axis=0)
+    std_blue_err = np.std(std_blue_cen_arr_global, axis=0)
 
-    return std_red_cen_err, std_blue_cen_err
+    return std_red_err, std_blue_err
 
-# Formatting for plots and animation
-rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']}, size=20)
-rc('text', usetex=True)
-rc('axes', linewidth=2)
-rc('xtick.major', width=2, size=7)
-rc('ytick.major', width=2, size=7)
+def read_data(path):
+    """
+    Reading in data and applying completeness and survey buffer region cuts
 
-# Reading in data and applying completeness and survey buffer region cuts
-eco = pd.read_csv('eco_dr1.csv', delimiter=',', header=0)
-eco_nobuff = eco.loc[(eco.grpcz.values >= 3000) & 
-    (eco.grpcz.values <= 7000) & (eco.absrmag.values <= -17.33) &
-    (eco.logmstar.values >= 8.9)]
+    Parameters
+    ----------
+    path: string
+        Path to data catalog
 
-# Assigning colour label to galaxies
-eco_nobuff = assign_colour_label_data(eco_nobuff)
+    Returns
+    ---------
+    eco: pd.DataFrame
+        Post-cuts survey
+    """
+    
+    eco = pd.read_csv('eco_dr1.csv', delimiter=',', header=0)
+    eco = eco.loc[(eco.grpcz.values >= 3000) & 
+        (eco.grpcz.values <= 7000) & (eco.absrmag.values <= -17.33) &
+        (eco.logmstar.values >= 8.9)]
 
-# Calculating velocity dispersion and combining with other galaxy details used
-# for plotting later
-eco_groups = eco_nobuff.groupby('grp')
-eco_keys = eco_groups.groups.keys()
-deltav_arr = []
-cen_stellar_mass_arr = []
-cen_colour_label_arr = []
-cen_colour_arr = []
-for index,key in enumerate(eco_keys):
-    group = eco_groups.get_group(key)
-    cz_arr = group.cz.values
-    grpcz = np.unique(group.grpcz.values)
-    deltav = cz_arr-grpcz
-    # Since some groups don't have a central
-    if 1 in group.fc.values:
-        cen_stellar_mass = group.logmstar.loc[group.fc.values == 1].values[0]
-        cen_colour_label = group.colour_label.loc[group.fc.values == 1].values[0]
-        cen_colour = group.modelu_rcorr.loc[group.fc.values == 1].values[0]
+    return eco
 
-    for val in deltav:
-        deltav_arr.append(val)
-        cen_stellar_mass_arr.append(cen_stellar_mass)
-        cen_colour_label_arr.append(cen_colour_label)
-        cen_colour_arr.append(cen_colour)
+def calc_vel_disp(groups, keys):
+    """
+    Calculating velocity dispersion and combining with other galaxy details 
+    used for plotting later
 
-# Creating dataframe of useful properties
-data = {'deltav': deltav_arr, 'log_cen_stellar_mass': cen_stellar_mass_arr,
-        'cen_colour_label': cen_colour_label_arr, 
-        'cen_ur_colour': cen_colour_arr}
-vel_col_mass_df = pd.DataFrame(data)
-df_blue_cen = vel_col_mass_df.loc[vel_col_mass_df['cen_colour_label'] == 'B']
-df_red_cen = vel_col_mass_df.loc[vel_col_mass_df['cen_colour_label'] == 'R']
+    Parameters
+    ----------
+    groups: pandas groupby object
+        Galaxies grouped by group ID
+    keys: np.array
+        Unique group IDs of galaxies in survey
 
-# Calculating std manually from mean set to 0 km/s
-stellar_mass_bins = np.arange(7,12,0.5)
-i = 0
-std_blue_cen_arr = []
-for index1,bin_edge in enumerate(stellar_mass_bins):
-    df_blue_cen_deltav_arr = []
-    if index1 == 9:
-        break
-    for index2,stellar_mass in enumerate(df_blue_cen.log_cen_stellar_mass.values):
-        if stellar_mass >= bin_edge and stellar_mass < stellar_mass_bins[index1+1]:
-            df_blue_cen_deltav_arr.append(df_blue_cen.deltav.values[index2])
-    N = len(df_blue_cen_deltav_arr)
-    std = std_func(df_blue_cen_deltav_arr)
-    std_blue_cen_arr.append(std)
+    Returns
+    ---------
+    data_df: pd.DataFrame
+        Useful properties needed for plotting
+    """
 
-i = 0
-std_red_cen_arr = []
-for index1,bin_edge in enumerate(stellar_mass_bins):
-    df_red_cen_deltav_arr = []
-    if index1 == 9:
-        break
-    for index2,stellar_mass in enumerate(df_red_cen.log_cen_stellar_mass.values):
-        if stellar_mass >= bin_edge and stellar_mass < stellar_mass_bins[index1+1]:
-            df_red_cen_deltav_arr.append(df_red_cen.deltav.values[index2])
-    N = len(df_red_cen_deltav_arr)
-    std = std_func(df_red_cen_deltav_arr)
-    std_red_cen_arr.append(std)
+    deltav_arr = []
+    cen_stellar_mass_arr = []
+    cen_colour_label_arr = []
+    cen_colour_arr = []
+    for key in keys:
+        group = groups.get_group(key)
+        cz_arr = group.cz.values
+        grpcz = np.unique(group.grpcz.values)
+        deltav = cz_arr-grpcz
+        # Since some groups don't have a central
+        if 1 in group.fc.values:
+            cen_stellar_mass = group.logmstar.loc[group.fc.values == 1].\
+                values[0]
+            cen_colour_label = group.colour_label.loc[group.fc.values == 1].\
+                values[0]
+            cen_colour = group.modelu_rcorr.loc[group.fc.values == 1].\
+                values[0]
 
-# Getting error from bootstraping for red and blue galaxies
-std_red_cen_err, std_blue_cen_err = get_sigma_error(eco_keys)
+        for val in deltav:
+            deltav_arr.append(val)
+            cen_stellar_mass_arr.append(cen_stellar_mass)
+            cen_colour_label_arr.append(cen_colour_label)
+            cen_colour_arr.append(cen_colour)
 
-fig1 = plt.figure(figsize=(15,10))
-gs = gridspec.GridSpec(1, 1)
-ax1 = plt.subplot(gs[0,0])
-plt.scatter(cen_stellar_mass_arr, deltav_arr, s=7, c=cen_colour_arr, 
-    cmap='coolwarm')
-cbar = plt.colorbar()
-cbar.set_label(r'$\mathbf{(u-r)^e_{cen}}$', labelpad=15, fontsize=20)
-plt.xlabel(r'$\mathbf{log_{10}\ M_{*,cen}}\ [\mathbf{M_{\odot}}]$', labelpad=10, 
-    fontsize=25)
-plt.ylabel(r'\boldmath$\Delta v\ \left[km/s\right]$', labelpad=10, fontsize=25)
+    data = {'deltav': deltav_arr, 'cen_logmstar': cen_stellar_mass_arr,
+            'cen_colour_label': cen_colour_label_arr, 
+            'cen_ur_colour': cen_colour_arr}
+    data_df = pd.DataFrame(data)
 
-left, bottom, width, height = [0.25, 0.20, 0.25, 0.25]
-ax2 = fig1.add_axes([left, bottom, width, height])
-ax2.errorbar(stellar_mass_bins[:-1],std_blue_cen_arr,yerr=std_blue_cen_err,
-    color='#2d77e5',fmt='s',ecolor='#2d77e5',markersize=4,capsize=5,
-    capthick=0.5)
-ax2.errorbar(stellar_mass_bins[:-1],std_red_cen_arr,yerr=std_red_cen_err,
-    color='#f46542',fmt='s',ecolor='#f46542',markersize=4,capsize=5,
-    capthick=0.5)
-ax2.set_ylabel(r'\boldmath$\sigma\ \left[km/s\right]$', fontsize=20)
-plt.savefig('eco_vel_disp.png',bbox_inches='tight')
+    return data_df
+
+def calc_sigma(df_red, df_blue):
+    """
+    Calculating std manually from mean set to 0 km/s
+
+    Parameters
+    ----------
+    df_red: pd.DataFrame
+        Properties of red galaxies
+    df_blue: pd.DataFrame
+        Properties of blue galaxies
+
+    Returns
+    ---------
+    std_red_arr: list
+        Std of red galaxies
+    std_blue_arr: list
+        Std of blue galaxies
+    stellar_mass_bins: np.array()
+        Bins of stellar mass in logspace
+    """
+
+    df_red_cen = df_red.copy()
+    df_blue_cen = df_blue.copy()
+
+    stellar_mass_bins = np.arange(7,12,0.5)
+    i = 0
+    std_blue_arr = []
+    for index1,bin_edge in enumerate(stellar_mass_bins):
+        df_blue_cen_deltav_arr = []
+        if index1 == 9:
+            break
+        for index2,stellar_mass in enumerate(df_blue_cen.\
+            log_cen_stellar_mass.values):
+            if stellar_mass >= bin_edge and stellar_mass < \
+                stellar_mass_bins[index1+1]:
+                df_blue_cen_deltav_arr.append(df_blue_cen.deltav.\
+                    values[index2])
+        N = len(df_blue_cen_deltav_arr)
+        std = calc_std(df_blue_cen_deltav_arr)
+        std_blue_arr.append(std)
+
+    i = 0
+    std_red_arr = []
+    for index1,bin_edge in enumerate(stellar_mass_bins):
+        df_red_cen_deltav_arr = []
+        if index1 == 9:
+            break
+        for index2,stellar_mass in enumerate(df_red_cen.\
+            log_cen_stellar_mass.values):
+            if stellar_mass >= bin_edge and stellar_mass < \
+                stellar_mass_bins[index1+1]:
+                df_red_cen_deltav_arr.append(df_red_cen.deltav.\
+                    values[index2])
+        N = len(df_red_cen_deltav_arr)
+        std = calc_std(df_red_cen_deltav_arr)
+        std_red_arr.append(std)
+    
+    return std_red_arr, std_blue_arr, stellar_mass_bins
+
+def main():
+    # Formatting for plot
+    rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']}, size=20)
+    rc('text', usetex=True)
+    rc('axes', linewidth=2)
+    rc('xtick.major', width=2, size=7)
+    rc('ytick.major', width=2, size=7)
+
+    path_to_data = 'eco_dr1.csv'
+    eco = read_data(path_to_data)
+
+    eco_nobuff = assign_colour_label_data(eco)
+
+
+    eco_groups = eco_nobuff.groupby('grp')
+    eco_keys = eco_groups.groups.keys()
+
+    vel_col_mass_df = calc_vel_disp(eco_groups, eco_keys)
+
+    # Separating both galaxy populations
+    df_blue_cen = vel_col_mass_df.loc[vel_col_mass_df['cen_colour_label'] == \
+        'B']
+    df_red_cen = vel_col_mass_df.loc[vel_col_mass_df['cen_colour_label'] == \
+        'R']
+
+    # Calculating std manually from mean set to 0 km/s
+    std_red_cen_arr, std_blue_cen_arr, mass_bins = calc_sigma(df_red_cen, 
+        df_blue_cen)
+
+    # Getting error from bootstraping for red and blue galaxies
+    std_red_cen_err, std_blue_cen_err = get_sigma_error(eco_groups, eco_keys)
+
+    # Getting columns needed for plot
+    stellar_mass, deltav, cen_colour = vel_col_mass_df['cen_logmstar'], \
+        vel_col_mass_df['deltav'], vel_col_mass_df['cen_ur_colour']
+
+    fig1 = plt.figure(figsize=(15,10))
+    # gs = gridspec.GridSpec(1, 1)
+    # ax1 = plt.subplot(gs[0,0])
+    plt.scatter(stellar_mass, deltav, s=7, c=cen_colour, 
+        cmap='coolwarm')
+    cbar = plt.colorbar()
+    cbar.set_label(r'$\mathbf{(u-r)^e_{cen}}$', labelpad=15, fontsize=20)
+    plt.xlabel(r'$\mathbf{log_{10}\ M_{*,cen}}\ [\mathbf{M_{\odot}}]$', 
+        labelpad=10, fontsize=25)
+    plt.ylabel(r'\boldmath$\Delta v\ \left[km/s\right]$', labelpad=10, 
+        fontsize=25)
+
+    left, bottom, width, height = [0.25, 0.20, 0.25, 0.25]
+    ax2 = fig1.add_axes([left, bottom, width, height])
+    ax2.errorbar(mass_bins[:-1],std_blue_cen_arr,yerr=std_blue_cen_err,
+        color='#2d77e5',fmt='s',ecolor='#2d77e5',markersize=4,capsize=5,
+        capthick=0.5)
+    ax2.errorbar(mass_bins[:-1],std_red_cen_arr,yerr=std_red_cen_err,
+        color='#f46542',fmt='s',ecolor='#f46542',markersize=4,capsize=5,
+        capthick=0.5)
+    ax2.set_ylabel(r'\boldmath$\sigma\ \left[km/s\right]$', fontsize=20)
+    plt.savefig('eco_vel_disp.png',bbox_inches='tight')
+
+if __name__ == '__main__':
+    main()
